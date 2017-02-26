@@ -6,6 +6,8 @@ from datetime import datetime
 import re
 import signal
 import sys
+import os
+from argparse import ArgumentParser
 
 class Waterrower:
     def __init__(self, serport ):
@@ -141,8 +143,16 @@ def signal_handler(signal, frame):
     sys.exit(0)
 
 signal.signal( signal.SIGINT, signal_handler) 
-        
-with serial.Serial('/dev/tty.usbmodem14111', 19200, timeout=0.01 ) as ser:
+
+parser = ArgumentParser(description='Logs Waterrower rowing data')
+parser.add_argument('serialport', metavar='serialport')
+args = parser.parse_args()
+
+if not os.path.exists(args.serialport):
+    print('Invalid serial port given!')
+    sys.exit(0)
+
+with serial.Serial( args.serialport, 19200, timeout=0.01 ) as ser:
     waterrower = Waterrower(ser)
     while True:
         waterrower.requestStrokeCount()
