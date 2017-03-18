@@ -10,8 +10,12 @@ import os
 from argparse import ArgumentParser
 
 class Waterrower:
-    def __init__(self, serport ):
+    def __init__(self, serport, logfile ):
         self.serialport = serport
+        if None != logfile:
+            self.logfile = open( logfile, "w")
+        else:
+            self.logfile = None
         self.serialport.write(b'USB\r\n')
         self.heartrate = 0
         self.totalspeed = 0
@@ -25,6 +29,7 @@ class Waterrower:
         self.calories_watts = 0
         self.calories_total = 0
         self.calories_up = 0
+        self.stroke_state = 0
 
     def __del__(self):
         #self.serialport.write(b'EXIT\r\n')
@@ -67,12 +72,13 @@ class Waterrower:
         self.calories_up = int(msg,16)
         
     def plot(self):
-        print( "%s | Tm: %02d:%02d:%02d.%d | HR: %s [bpm]  Dist: %s [m]  Strk: %s  Avg: %s [m/s]  Tot: %s |  CalW: %s  TotCal: %s CalUp: %s" %
+        msg = ("%s | Tm: %02d:%02d:%02d.%d | StrkSt: %d | HR: %s [bpm]  Dist: %s [m]  Strk: %s  Avg: %s [m/s]  Tot: %s |  CalW: %s  TotCal: %s CalUp: %s" %
                (datetime.today().isoformat(' '),
                 self.display_hours,
                 self.display_minutes,
                 self.display_seconds,
                 self.display_tenthseconds,
+                self.stroke_state,
                 self.heartrate,
                 self.distance,
                 self.strokecount,
@@ -81,6 +87,11 @@ class Waterrower:
                 self.calories_watts,
                 self.calories_total,
                 self.calories_up))
+        print(msg)
+        if self.logfile != None:
+            self.logfile.write("%s\r\n" % msg)
+
+        
         
     def parse(self, lines):
         for line in lines:
@@ -109,6 +120,10 @@ class Waterrower:
                 self.parseCaloriesTotal( line[6:] )
             elif re.search(b'^IDS08C', line):
                 self.parseCaloriesUp( line[6:] )
+            elif re.search(b'^SS', line):
+                self.stroke_state = 1
+            elif re.search(b'^SE', line):
+                self.stroke_state = 0
 
     def requestStrokeCount(self):
         self.serialport.write(b'IRD140\r\n')
@@ -145,15 +160,18 @@ def signal_handler(signal, frame):
 signal.signal( signal.SIGINT, signal_handler) 
 
 parser = ArgumentParser(description='Logs Waterrower rowing data')
-parser.add_argument('serialport', metavar='serialport')
+parser.add_argument('serialport', metavar='serialport', help='the serialport for communication')
+parser.add_argument('-f', '--logfile', help='logs the output to this file' )
+
 args = parser.parse_args()
 
 if not os.path.exists(args.serialport):
     print('Invalid serial port given!')
     sys.exit(0)
 
+    
 with serial.Serial( args.serialport, 19200, timeout=0.01 ) as ser:
-    waterrower = Waterrower(ser)
+    waterrower = Waterrower(ser, args.logfile )
     while True:
         waterrower.requestStrokeCount()
         waterrower.requestTotalSpeed()
