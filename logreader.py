@@ -7,6 +7,8 @@ import re
 import datetime
 import difflib
 from argparse import ArgumentParser
+from model.LogEntry import LogEntry
+from model.Stroke import Stroke
 
 # convert logfile into n-tupel (python list) for easier visualization
 # -> use pyqtgraph ast a widget for prototyping
@@ -157,7 +159,9 @@ class LogReader:
                 strokeCount = int(strokeCount_splitted[1])
                 validationString = ":".join([ strokeCount_splitted[0], "%d" % strokeCount])
                 if strokeCount_raw == validationString:
-                    return strokeCount
+                    if strokeCount > 0:
+                        return strokeCount
+                    return None
                 print("len(strokeCount)=%d len(validationString)=%d" % (len(strokeCount_raw), len(validationString)))
                 print("\nStrokeCount:\n\tActual: \t%s\n\tConverted:\t%d" % (strokeCount_raw, strokeCount))
         return None
@@ -253,6 +257,7 @@ class LogReader:
     def read(self):
         with open(self.logfile) as f:
             lines = f.readlines()
+            currentStroke = Stroke(0)
             for line in lines:
                 splitLine = line.split('|')
                 timestamp = splitLine[0]
@@ -267,16 +272,23 @@ class LogReader:
                 totalSpeed = workout_splitted[4]
                 calories = splitLine[4]
                 calories_splitted = calories.split('  ')
-                self.readHostTime( timestamp )
-                self.readDisplayTime( rowingtime )
-                self.isStrokeActive( stroking )
-                self.readStrokeCount( strokeCount )
-                self.readHeartRate( heartRate )
-                self.readDistance( distance )
-                self.readAverageSpeed( averageSpeed )
-                self.readTotalSpeed( totalSpeed )
-                self.readCaloriesWorked( calories_splitted[1] )
-                self.readCaloriesTotal( calories_splitted[2] )
+                count = self.readStrokeCount(strokeCount)
+                if count != None:
+                    if currentStroke.getStrokeID() != count:
+                        currentStroke.plot()
+                        currentStroke = Stroke( count )
+                    entry=LogEntry()
+                    entry.setTime(self.readHostTime( timestamp ) )
+                    entry.setDisplayTime(self.readDisplayTime( rowingtime ) )
+                    entry.setStrokePhase(self.isStrokeActive( stroking ) )
+                    entry.setStrokeCount( count )
+                    entry.setHeartRate(self.readHeartRate( heartRate ) )
+                    entry.setDistance(self.readDistance( distance ) )
+                    entry.setAverageSpeed(self.readAverageSpeed( averageSpeed ) )
+                    entry.setTotalSpeed(self.readTotalSpeed( totalSpeed ) )
+                    entry.setCaloriesWorkedi(self.readCaloriesWorked( calories_splitted[1] ) )
+                    entry.setCaloriesTotal(self.readCaloriesTotal( calories_splitted[2] ) )
+                    currentStroke.addLogEntry( entry )
 
 
 def signal_handler(signal, frame):
